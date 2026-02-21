@@ -230,11 +230,17 @@ def analyze(area: str | None):
 
 # ── Trends Command ──────────────────────────────────────────────────
 
-@cli.command()
+@cli.group()
+def trends():
+    """📊 Manage and generate trend reports."""
+    pass
+
+
+@trends.command("generate")
 @click.option("--area", "-a", required=True, help="Area to generate trend report for")
 @click.option("--period", "-p", default=7, help="Period in days (default: 7)")
-def trends(area: str, period: int):
-    """📊 Generate trend report for a research area."""
+def trends_generate(area: str, period: int):
+    """Generate a new trend report for a research area."""
     coord = get_coordinator()
     report = coord.trends_only(area_name=area, period_days=period)
 
@@ -244,7 +250,7 @@ def trends(area: str, period: int):
         # Summary panel
         console.print(Panel(
             report.summary,
-            title=f"📊 Trend Report: {area}",
+            title=f"📊 Trend Report: {area} (ID: {report.id})",
             subtitle=f"{report.period_start} → {report.period_end}",
             border_style="magenta",
         ))
@@ -265,6 +271,79 @@ def trends(area: str, period: int):
                     console.print(f"  [{pid}] {paper.title[:80]}{score}")
 
     coord.storage.close()
+
+
+@trends.command("list")
+@click.option("--area", "-a", default=None, help="Filter by area")
+@click.option("--limit", "-l", default=20, help="Max number of reports to show")
+def trends_list(area: str | None, limit: int):
+    """List past trend reports stored in the database."""
+    storage = Storage()
+    reports = storage.get_trend_reports(area_name=area, limit=limit)
+    storage.close()
+
+    if not reports:
+        console.print("[yellow]No trend reports found. Run 'journal trends generate' first.[/]")
+        return
+
+    table = Table(title=f"📊 Past Trend Reports ({len(reports)} shown)", show_lines=True)
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Area", style="bold cyan")
+    table.add_column("Created At", style="dim")
+    table.add_column("Papers", justify="right")
+    table.add_column("Top Keywords", style="magenta", max_width=40)
+
+    for r in reports:
+        created_str = r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "-"
+        keywords_str = ", ".join(r.hot_keywords[:5]) if r.hot_keywords else "-"
+        table.add_row(
+            str(r.id),
+            r.area_name,
+            created_str,
+            str(r.total_papers),
+            keywords_str[:40] + ("..." if len(keywords_str) > 40 else ""),
+        )
+
+    console.print(table)
+
+
+@trends.command("show")
+@click.argument("report_id", type=int)
+def trends_show(report_id: int):
+    """View a specific past trend report by ID."""
+    storage = Storage()
+    report = storage.get_trend_report_by_id(report_id)
+    
+    if not report:
+        console.print(f"[red]Trend Report #{report_id} not found.[/]")
+        storage.close()
+        return
+
+    console.print()
+    # Summary panel
+    console.print(Panel(
+        report.summary,
+        title=f"📊 Trend Report: {report.area_name} (ID: {report.id})",
+        subtitle=f"{report.period_start} → {report.period_end}",
+        border_style="magenta",
+    ))
+
+    # Hot keywords
+    if report.hot_keywords:
+        kw_text = " | ".join(f"[bold magenta]{kw}[/]" for kw in report.hot_keywords[:10])
+        console.print(f"\n🔥 [bold]Hot Keywords:[/] {kw_text}")
+
+    # Top papers
+    if report.top_paper_ids:
+        console.print(f"\n📌 [bold]Top Papers:[/]")
+        for pid in report.top_paper_ids[:5]:
+            paper = storage.get_paper_by_id(pid)
+            if paper:
+                analysis = storage.get_analysis(pid)
+                score = f" [yellow](score: {analysis.importance_score})[/]" if analysis else ""
+                console.print(f"  [{pid}] {paper.title[:80]}{score}")
+
+    storage.close()
 
 
 # ── Pipeline Command ────────────────────────────────────────────────

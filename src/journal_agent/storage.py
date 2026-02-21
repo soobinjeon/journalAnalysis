@@ -257,6 +257,25 @@ class Storage:
         ).fetchone()
         return TrendReport.from_dict(dict(row)) if row else None
 
+    def get_trend_reports(self, area_name: Optional[str] = None, limit: int = 20) -> list[TrendReport]:
+        if area_name:
+            rows = self.conn.execute(
+                "SELECT * FROM trend_reports WHERE area_name = ? ORDER BY created_at DESC LIMIT ?",
+                (area_name, limit)
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM trend_reports ORDER BY created_at DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+        return [TrendReport.from_dict(dict(r)) for r in rows]
+
+    def get_trend_report_by_id(self, report_id: int) -> Optional[TrendReport]:
+        row = self.conn.execute(
+            "SELECT * FROM trend_reports WHERE id = ?", (report_id,)
+        ).fetchone()
+        return TrendReport.from_dict(dict(row)) if row else None
+
     # ── Stats ───────────────────────────────────────────────────────
 
     def get_stats(self) -> dict:

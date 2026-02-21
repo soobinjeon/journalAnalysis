@@ -20,7 +20,8 @@ class CrossRefCollector(BaseCollector):
     def search(self, query: str, max_results: int = 20) -> list[Paper]:
         """Search CrossRef for papers."""
         params = {
-            "query": query,
+            "query.bibliographic": query,
+            "filter": "has-abstract:true",
             "rows": min(max_results, 100),
             "sort": "published",
             "order": "desc",
